@@ -26,4 +26,6 @@ f64 = []
 int = []
 
 [dev-dependencies]
+quickcheck = "1"
+quickcheck_macros = "1"
 serde_test = "1.0"

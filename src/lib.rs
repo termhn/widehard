@@ -103,6 +103,7 @@ pub mod interp;
 pub mod mat;
 pub mod projection;
 pub mod rotor;
+pub mod traits;
 pub mod transform;
 pub mod vec;
 

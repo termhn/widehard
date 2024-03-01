@@ -1,5 +1,6 @@
 use std::ops::*;
 
+use crate::traits::GeometricMul;
 use crate::util::EqualsEps;
 use crate::*;
 
@@ -77,7 +78,7 @@ macro_rules! vec3s {
 
             #[inline]
             pub fn dot(&self, other: $n) -> $t {
-                (self.x * other.x) + (self.y * other.y) + (self.z * other.z)
+                GeometricMul::dot(self, &other)
             }
 
             /// The wedge (aka exterior) product of two vectors.
@@ -89,11 +90,7 @@ macro_rules! vec3s {
             /// one which would move `self` closer to `other`.
             #[inline]
             pub fn wedge(&self, other: $n) -> $bn {
-                $bn::new(
-                    (self.x * other.y) - (self.y * other.x),
-                    (self.x * other.z) - (self.z * other.x),
-                    (self.y * other.z) - (self.z * other.y),
-                )
+                GeometricMul::wedge(self, &other)
             }
 
             /// The geometric product of this and another vector, which
@@ -106,7 +103,7 @@ macro_rules! vec3s {
             /// bring `other` towards `self`, and rotate in that direction by twice the angle between them).
             #[inline]
             pub fn geom(&self, other: $n) -> $rn {
-                $rn::new(self.dot(other), self.wedge(other))
+                GeometricMul::gmul(self, &other)
             }
 
             #[inline]
@@ -369,6 +366,33 @@ macro_rules! vec3s {
             #[inline]
             pub fn as_mut_ptr(&mut self) -> *mut $t {
                 self as *mut $n as *mut $t
+            }
+        }
+
+        impl GeometricMul<$n> for $n {
+            type Lower = $t;
+            type Upper = $bn;
+            type Full = $rn;
+
+            #[inline]
+            fn dot(&self, other: &$n) -> $t {
+                (self.x * other.x) + (self.y * other.y) + (self.z * other.z)
+            }
+
+            /// The wedge (aka exterior) product of two vectors.
+            ///
+            /// This operation results in a bivector, which represents
+            /// the plane parallel to the two vectors, and which has a
+            /// 'oriented area' equal to the parallelogram created by extending
+            /// the two vectors, oriented such that the positive direction is the
+            /// one which would move `self` closer to `other`.
+            #[inline]
+            fn wedge(&self, other: &$n) -> $bn {
+                $bn::new(
+                    (self.x * other.y) - (self.y * other.x),
+                    (self.x * other.z) - (self.z * other.x),
+                    (self.y * other.z) - (self.z * other.y),
+                )
             }
         }
 

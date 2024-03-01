@@ -34,6 +34,7 @@
 //! onto each unit vector.
 use crate::*;
 
+use crate::traits::GeometricMul;
 use crate::util::*;
 
 use std::ops::*;
@@ -291,7 +292,7 @@ macro_rules! bivec2s {
 }
 
 macro_rules! bivec3s {
-    ($($bn:ident => ($vt:ident, $t:ident)),+) => {
+    ($($bn:ident => ($vt:ident, $rt:ident, $t:ident)),+) => {
         $(
         /// A bivector in 3d space.
         ///
@@ -384,6 +385,11 @@ macro_rules! bivec3s {
             }
 
             #[inline]
+            pub fn reverse(&self) -> Self {
+                -*self
+            }
+
+            #[inline]
             pub fn layout() -> alloc::alloc::Layout {
                 alloc::alloc::Layout::from_size_align(std::mem::size_of::<Self>(), std::mem::align_of::<$t>()).unwrap()
             }
@@ -456,6 +462,41 @@ macro_rules! bivec3s {
             fn add(mut self, rhs: $bn) -> Self {
                 self += rhs;
                 self
+            }
+        }
+
+        impl GeometricMul<$bn> for $bn {
+            type Lower = $t;
+            type Upper = $bn;
+            type Full = $rt;
+
+            //       other
+            //     xy  xz  yz
+            // xy  -1 -yz  xz
+            // xz  yz  -1 -xy
+            // yz -xz  xy  -1
+
+            #[inline]
+            fn dot(&self, other: &$bn) -> Self::Lower {
+                (self.xy * -other.xy) + (self.yz * -other.yz) + (self.xz * -other.xz)
+            }
+
+            /// The wedge (aka exterior) product of two bivectors.
+            #[inline]
+            fn wedge(&self, other: &$bn) -> Self::Upper {
+                $bn::new(
+                    (self.xz * -other.yz) + -(self.yz * -other.xz),
+                    (self.xy * other.yz)  + -(-self.yz * -other.xy),
+                    (-self.xy * other.xz) + -(-self.xz * other.xy),
+                )
+            }
+        }
+
+        impl Add<$t> for $bn {
+            type Output = $rt;
+            #[inline]
+            fn add(self, rhs: $t) -> Self::Output {
+                $rt::new(rhs, self)
             }
         }
 
@@ -544,7 +585,7 @@ macro_rules! bivec3s {
             type Output = $bn;
             #[inline]
             fn div(mut self, rhs: $t) -> $bn {
-                self.xy /= rhs;
+                self /= rhs;
                 self
             }
         }
@@ -595,14 +636,40 @@ bivec2s!(
 );
 
 bivec3s!(
-    Bivec3 => (Vec3, f32),
-    Bivec3x4 => (Vec3x4, f32x4),
-    Bivec3x8 => (Vec3x8, f32x8)
+    Bivec3 => (Vec3, Rotor3, f32),
+    Bivec3x4 => (Vec3x4, Rotor3x4, f32x4),
+    Bivec3x8 => (Vec3x8, Rotor3x8, f32x8)
 );
 
 #[cfg(feature = "f64")]
 bivec3s!(
-    DBivec3 => (DVec3, f64),
-    DBivec3x2 => (DVec3x2, f64x2),
-    DBivec3x4 => (DVec3x4, f64x4)
+    DBivec3 => (DVec3, DRotor3, f64),
+    DBivec3x2 => (DVec3x2, DRotor3x2, f64x2),
+    DBivec3x4 => (DVec3x4, DRotor3x4, f64x4)
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::TestResult;
+    use quickcheck_macros::quickcheck;
+
+    #[quickcheck]
+    fn test_bivector_inverse(bv: (f32, f32, f32)) -> TestResult {
+        let bivec = Bivec3::new(bv.0, bv.1, bv.2);
+
+        if bivec.mag().is_nan() || bivec.mag().is_infinite() || bivec.mag() < 0.1e5 {
+            return TestResult::discard();
+        }
+
+        let scale = bivec.gmul(&bivec.reverse());
+        if scale.bv.mag() > 0.1e6 {
+            return TestResult::from_bool(false);
+        }
+        let inverse = bivec.reverse() / scale.s;
+
+        let unit = bivec.gmul(&inverse);
+
+        TestResult::from_bool(unit.bv.mag().abs() < 0.1e6 && (unit.s - 1.0).abs() < 0.1e6)
+    }
+}
